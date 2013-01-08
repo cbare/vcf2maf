@@ -7,3 +7,9 @@ Vcf2maf is a tool for converting files in [Variant Call Format (VCF)](https://wi
 
 The [DCC Archive Validator](https://wiki.nci.nih.gov/display/TCGA/TCGA+Archive+Validator) checks the integrity of a MAF file.
 
+License and Copyright
+---------------------
+
+&copy; Copyright 2012 Sage Bionetworks
+
+This software is licensed under the [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0).
