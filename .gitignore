@@ -1,0 +1,4 @@
+*.pyc
+*.maf
+*.vcf
+examples/*
