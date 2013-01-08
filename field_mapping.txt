@@ -1,0 +1,67 @@
+lookup                              Hugo_Symbol
+
+lookup                              Entrez_Gene_Id
+
+##center                            Center
+
+##reference                         NCBI_Build
+
+CHROM                               Chromosome
+
+start                               Start_Position
+
+end                                 End_Position
+
+'+'                                 Strand
+
+??                                  Variant_Classification
+
+INFO:VT                             Variant_Type
+
+REF                                 Reference_Allele
+
+ALT & REF & PRIMARY:GT              Tumor_Seq_Allele1
+
+ALT & REF & PRIMARY:GT              Tumor_Seq_Allele2
+
+lookup                              dbSNP_RS
+
+lookup                              dbSNP_Val_Status
+
+##SAMPLE:File                       Tumor_Sample_Barcode
+
+##SAMPLE:File                       Matched_Norm_Sample_Barcode
+
+ALT & REF & NORMAL:GT               Match_Norm_Seq_Allele1
+
+ALT & REF & NORMAL:GT               Match_Norm_Seq_Allele2
+
+ALT & REF & PRIMARY:GT              Tumor_Validation_Allele1
+
+ALT & REF & PRIMARY:GT              Tumor_Validation_Allele2
+
+                                    Match_Norm_Validation_Allele1
+
+                                    Match_Norm_Validation_Allele2
+
+                                    Verification_Status
+
+                                    Validation_Status
+
+INFO:SOMATIC                        Mutation_Status
+
+##phase & /vs|                      Sequencing_Phase
+
+                                    Sequence_Source
+
+                                    Validation_Method
+
+null                                Score
+
+null                                BAM_File
+
+##SAMPLE:Platform                   Sequencer
+
+                                    Tumor_Sample_UUID
+
+                                    Matched_Norm_Sample_UUID
