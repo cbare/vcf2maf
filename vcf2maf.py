@@ -8,6 +8,9 @@ import argparse
 import vcf
 from time import time
 
+## output stream for logging
+_log = sys.stderr
+
 ## regex matching TCGA barcodes
 _barcode_pattern = re.compile(r'(TCGA-\w{2}-\w{4}-\w{3}-\w{3}-\w{4}-\w{2})')
 
@@ -20,9 +23,9 @@ def list_samples(vcf_file):
   List the samples in a vcf file
   """
   vcf_reader = vcf.Reader(vcf_file)
-  print "Sample IDs:"
+  print 'Sample IDs:'
   for sample in vcf_reader.metadata['SAMPLE']:
-    print "  ",sample['ID']
+    print ' ',sample['ID']
 
 
 def _extract_tcga_barcode(sample):
@@ -43,7 +46,7 @@ def _extract_tcga_barcode(sample):
       barcode = ''
   return barcode
 
-def vcf2maf(vcf_file, maf_file, verbose=True):
+def vcf2maf(vcf_file, maf_file, verbose=False):
   """
   Read a VCf file and output a corresponding MAF file.
   """
@@ -72,11 +75,11 @@ def vcf2maf(vcf_file, maf_file, verbose=True):
     raise Exception('No normal samples found among: %s' % (", ".join(sample_names),))
   sample = normal_samples[0]
   normal_sample_id = sample['ID']
-  if verbose: sys.stderr.write('Normal sample found: %s\n' % (normal_sample_id,))
+  if verbose: _log.write('Normal sample found: %s\n' % (normal_sample_id,))
 
   ## look for TCGA barcode
   normal_sample_barcode = _extract_tcga_barcode(sample)
-  if verbose: sys.stderr.write('normal sample barcode = '+str(normal_sample_barcode)+'\n')
+  if verbose: _log.write('normal sample barcode = '+str(normal_sample_barcode)+'\n')
 
   ## look for UUID
   normal_sample_uuid = sample['SampleUUID'] if 'SampleUUID' in sample else ''
@@ -88,11 +91,11 @@ def vcf2maf(vcf_file, maf_file, verbose=True):
     raise Exception('No tumor samples found among: %s' % (", ".join(sample_names),))
   sample = tumor_samples[0]
   tumor_sample_id = sample['ID']
-  if verbose: sys.stderr.write('Tumor sample found: %s\n' % (tumor_sample_id,))
+  if verbose: _log.write('Tumor sample found: %s\n' % (tumor_sample_id,))
 
   ## look for TCGA barcode
   tumor_sample_barcode = _extract_tcga_barcode(sample)
-  if verbose: sys.stderr.write('normal sample barcode = '+str(tumor_sample_barcode)+'\n')
+  if verbose: _log.write('normal sample barcode = '+str(tumor_sample_barcode)+'\n')
 
   ## look for UUID
   tumor_sample_uuid = sample['SampleUUID'] if 'SampleUUID' in sample else ''
@@ -106,162 +109,151 @@ def vcf2maf(vcf_file, maf_file, verbose=True):
     for record in vcf_reader:
       i += 1
       if verbose and i % 10000 == 0:
-        sys.stderr.write('processing record %d\n' % (i,))
+        _log.write('processing record %d\n' % (i,))
+
+      fields = []
 
       ## Hugo_Symbol
-      maf_file.write('???')
-      maf_file.write('\t')
+      fields.append('???')
 
       ## Entrez_Gene_Id
       ## TODO: look for INFO:GENE field
-      maf_file.write('???')
-      maf_file.write('\t')
+      fields.append('???')
 
       ## Center
-      maf_file.write(';'.join(centers))
-      maf_file.write('\t')
+      fields.append(';'.join(centers))
 
       ## NCBI_Build
-      maf_file.write(ncbi_build)
-      maf_file.write('\t')
+      fields.append(ncbi_build)
 
       ## Chromosome
-      maf_file.write(record.CHROM)
-      maf_file.write('\t')
+      fields.append(record.CHROM)
 
       ## Start_Position
-      maf_file.write(str(record.start))
-      maf_file.write('\t')
+      fields.append(str(record.start))
 
       ## End_Position
-      maf_file.write(str(record.end))
-      maf_file.write('\t')
+      fields.append(str(record.end))
 
       ## Strand
-      maf_file.write(strand)
-      maf_file.write('\t')
+      fields.append(strand)
 
       ## Variant_Classification
-      maf_file.write('???')
-      maf_file.write('\t')
+      fields.append('???')
 
       ## Variant_Type
-      maf_file.write(record.INFO['VT'])
-      maf_file.write('\t')
+      fields.append(record.INFO['VT'])
 
       ## Reference_Allele
-      maf_file.write(record.REF)
-      maf_file.write('\t')
+      fields.append(record.REF)
 
       ## extract tumor alleles
       record.genotype(tumor_sample_id)
 
       ## find tumor alleles
-      tumor_alleles = split_on_slash_or_bar.split(record.genotype(tumor_sample_id).gt_bases)
-      if len(tumor_alleles) < 1 or len(tumor_alleles) > 2:
+      ## note: gt_bases will return None if the VCF file 
+      ##       see lines 389-391 of PyVCF/vcf/parser.py
+      if record.genotype(tumor_sample_id).gt_bases:
+        tumor_alleles = split_on_slash_or_bar.split(record.genotype(tumor_sample_id).gt_bases)
+        if len(tumor_alleles) < 1 or len(tumor_alleles) > 2:
+          ## warning
+          _log.write('%d tumor alleles detected in record %d. Only haploid and diploid genotypes are supported.' % (len(tumor_alleles), i, ))
+      else:
         ## warning
-        sys.stderr("%d tumor alleles detected in record %d. Only haploid and diploid genotypes are supported." % (len(tumor_alleles), i, ))
+        _log.write('No tumor alleles detected. Skipping record %d.\n' % (i,))
+        ## not sure what the right thing to do is here. MAF doesn't seem to
+        ## allow blank alleles.
+        continue
 
       ## Tumor_Seq_Allele1
-      maf_file.write(tumor_alleles[0] if len(tumor_alleles) > 0 else '')
-      maf_file.write('\t')
+      fields.append(tumor_alleles[0] if len(tumor_alleles) > 0 else '')
 
       ## Tumor_Seq_Allele2
-      maf_file.write(tumor_alleles[1] if len(tumor_alleles) > 1 else '')
-      maf_file.write('\t')
+      fields.append(tumor_alleles[1] if len(tumor_alleles) > 1 else '')
 
       ## dbSNP_RS
-      maf_file.write('???')
-      maf_file.write('\t')
+      fields.append('???')
 
       ## dbSNP_Val_Status
-      maf_file.write('???')
-      maf_file.write('\t')
+      fields.append('???')
 
       ## Tumor_Sample_Barcode
-      maf_file.write(tumor_sample_barcode)
-      maf_file.write('\t')
+      fields.append(tumor_sample_barcode)
 
       ## Matched_Norm_Sample_Barcode
-      maf_file.write(normal_sample_barcode)
-      maf_file.write('\t')
+      fields.append(normal_sample_barcode)
 
       ## find normal alleles
-      normal_alleles = split_on_slash_or_bar.split(record.genotype(normal_sample_id).gt_bases)
-      if len(normal_alleles) < 1 or len(normal_alleles) > 2:
+      if record.genotype(normal_sample_id).gt_bases:
+        normal_alleles = split_on_slash_or_bar.split(record.genotype(normal_sample_id).gt_bases)
+        if len(normal_alleles) < 1 or len(normal_alleles) > 2:
+          ## warning
+          _log.write('%d normal alleles detected in record %d. Only haploid and diploid genotypes are supported.\n' % (len(normal_alleles), i, ))
+      else:
         ## warning
-        sys.stderr("%d normal alleles detected in record %d. Only haploid and diploid genotypes are supported." % (len(normal_alleles), i, ))
+        _log.write('No normal alleles detected. Skipping record %d.\n' % (i,))
+        ## not sure what the right thing to do is here. MAF doesn't seem to
+        ## allow blank alleles.
+        continue
 
       ## Match_Norm_Seq_Allele1
-      maf_file.write(normal_alleles[0] if len(normal_alleles) > 0 else '')
-      maf_file.write('\t')
+      fields.append(normal_alleles[0] if len(normal_alleles) > 0 else '')
 
       ## Match_Norm_Seq_Allele2
-      maf_file.write(normal_alleles[1] if len(normal_alleles) > 1 else '')
-      maf_file.write('\t')
+      fields.append(normal_alleles[1] if len(normal_alleles) > 1 else '')
 
       ## Tumor_Validation_Allele1
-      maf_file.write('')
-      maf_file.write('\t')
+      fields.append('')
 
       ## Tumor_Validation_Allele2
-      maf_file.write('')
-      maf_file.write('\t')
+      fields.append('')
 
       ## Match_Norm_Validation_Allele1
-      maf_file.write('')
-      maf_file.write('\t')
+      fields.append('')
 
       ## Match_Norm_Validation_Allele2
-      maf_file.write('')
-      maf_file.write('\t')
+      fields.append('')
 
       ## Verification_Status
-      maf_file.write('')
-      maf_file.write('\t')
+      fields.append('')
 
       ## Validation_Status
       ## TODO: see: Including validation status in VCF file in
       ## https://wiki.nci.nih.gov/display/TCGA/TCGA+Variant+Call+Format+%28VCF%29+Specification
-      maf_file.write('')
-      maf_file.write('\t')
+      fields.append('')
 
       ## Mutation_Status
-      maf_file.write('Somatic')
-      maf_file.write('\t')
+      fields.append('Somatic')
 
       ## Sequencing_Phase (ex. Phase_I)
       ## TODO: how does this relate to phase in VCF, if at all?
-      maf_file.write('')
-      maf_file.write('\t')
+      fields.append('')
 
       ## Sequence_Source
-      maf_file.write('???')
-      maf_file.write('\t')
+      fields.append('???')
 
       ## Validation_Method
-      maf_file.write('???')
-      maf_file.write('\t')
+      fields.append('???')
 
       ## Score
-      maf_file.write('')
-      maf_file.write('\t')
+      fields.append('')
 
       ## BAM_File
-      maf_file.write('')
-      maf_file.write('\t')
+      fields.append('')
 
       ## Sequencer
-      maf_file.write(platform)
-      maf_file.write('\t')
+      fields.append(platform)
 
       ## Tumor_Sample_UUID
-      maf_file.write(tumor_sample_uuid)
-      maf_file.write('\t')
+      fields.append(tumor_sample_uuid)
 
       ## Matched_Norm_Sample_UUID
-      maf_file.write(normal_sample_uuid)
+      fields.append(normal_sample_uuid)
 
+      ## write a row of the MAF file
+      for field in fields:
+        maf_file.write(field)
+        maf_file.write('\t')
       maf_file.write('\n')
 
   except Exception:
@@ -296,17 +288,16 @@ def main():
   else:
     maf_file = sys.stdout
 
-  n = vcf2maf(vcf_file, maf_file)
+  n = vcf2maf(vcf_file, maf_file, verbose=args.verbose)
 
   t = time() - t
 
   if args.verbose:
-    sys.stderr.write("vcf2maf processed %d records in %0.1f seconds\n" % (n, t,))
-    sys.stderr.write("...or %0.1f seconds per %d records\n" % (t/n*100000, 100000,))
+    _log.write('vcf2maf processed %d records in %0.1f seconds\n' % (n, t,))
+    _log.write('...or %0.1f seconds per %d records\n' % (t/n*100000, 100000,))
 
-293178
 
 ## call main method if this file is run as a script
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
 
