@@ -1,12 +1,18 @@
 ## vcf2maf
 ## chris.bare@sagebase.org
+##
 ############################################################
+
+## example usage:
+## gunzip --stdout TCGA-AA-A024_W_IlluminaGA-DNASeq_exome.vcf.gz | python vcf2maf.py -v > tmp.out3.maf
 
 import re
 import sys
 import argparse
 import vcf
 from time import time
+import maf_spec
+
 
 ## output stream for logging
 _log = sys.stderr
@@ -54,8 +60,10 @@ def vcf2maf(vcf_file, maf_file, verbose=False):
   vcf_reader = vcf.Reader(vcf_file)
 
   centers = vcf_reader.metadata['center']
+
+  ## get genome assembly identifier
+  ## also look in ##contig=<ID={ID},length={length},assembly={assembly}
   ncbi_build = vcf_reader.metadata['reference']['ID'].split(' ')[0]
-  
 
   platform = vcf_reader.metadata['SAMPLE'][0]['Platform']
   # TODO check all platforms and warn if different
@@ -100,9 +108,12 @@ def vcf2maf(vcf_file, maf_file, verbose=False):
   ## look for UUID
   tumor_sample_uuid = sample['SampleUUID'] if 'SampleUUID' in sample else ''
 
+  ## always use plus strand by convention
   strand = '+'
 
-  ## write Mutation Annotation Format (MAF) file
+  ## write Mutation Annotation Format (MAF) file header
+  maf_file.write('\t'.join([col['name'] for col in maf_spec.columns]))
+  maf_file.write('\n')
 
   try:
     i = 0

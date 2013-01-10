@@ -1,4 +1,3 @@
 *.pyc
 *.maf
-*.vcf
-examples/*
+long_examples/*
