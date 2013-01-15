@@ -24,14 +24,14 @@ _barcode_pattern = re.compile(r'(TCGA-\w{2}-\w{4}-\w{3}-\w{3}-\w{4}-\w{2})')
 split_on_slash_or_bar = re.compile(r"[\|\/\\]")
 
 
-def list_samples(vcf_file):
+def list_samples(vcf_file, out_file):
   """
   List the samples in a vcf file
   """
   vcf_reader = vcf.Reader(vcf_file)
-  print 'Sample IDs:'
+  out_file.write('Sample IDs:\n')
   for sample in vcf_reader.metadata['SAMPLE']:
-    print ' ',sample['ID']
+    out_file.write(' '+sample['ID']+'\n')
 
 
 def _extract_tcga_barcode(sample):
@@ -51,6 +51,7 @@ def _extract_tcga_barcode(sample):
     else:
       barcode = ''
   return barcode
+
 
 def vcf2maf(vcf_file, maf_file, verbose=False):
   """
@@ -125,6 +126,7 @@ def vcf2maf(vcf_file, maf_file, verbose=False):
       fields = []
 
       ## Hugo_Symbol
+      # TODO:
       fields.append('???')
 
       ## Entrez_Gene_Id
@@ -276,39 +278,65 @@ def vcf2maf(vcf_file, maf_file, verbose=False):
 
 
 def main():
-  t = time()
   parser = argparse.ArgumentParser(description='Convert VCF files to MAF format.')
   parser.add_argument('-v', '--verbose', action='store_true', help='Generate verbose output')
-  parser.add_argument('--vcf', dest='vcf_filename', help='Filename of a VCF file to read')
+  parser.add_argument('--vcf', dest='vcf_filenames', nargs='+', help='Filename of VCF file(s) to read')
   parser.add_argument('--maf', dest='maf_filename', help='Filename of MAF file to output')
+  parser.add_argument('-o', '--out', dest='out_filename', help='Name of output file')
   parser.add_argument('-l', '--list-samples', action='store_true', help='List the sample IDs in a VCF file')
-
+  parser.add_argument('vcf_filenames2', metavar='VCF_FILENAME', nargs='*', help='Filename of a VCF file to read')
+  
   args = parser.parse_args()
 
-  if args.vcf_filename:
-    vcf_file = open(args.vcf_filename, 'r')
+  ## VCF files can be specified by --vcf switch or as positional args
+  if args.vcf_filenames2:
+    if args.vcf_filenames is None:
+      args.vcf_filenames = args.vcf_filenames2
+    else:
+      args.vcf_filenames.extend(args.vcf_filenames2)
+
+  ## read from VCF files or STDIN
+  if args.vcf_filenames:
+    vcf_files = ( open(filename, 'r') for filename in args.vcf_filenames )
   else:
-    vcf_file = sys.stdin
+    vcf_files = [ sys.stdin ]
 
   if args.list_samples:
-    list_samples(vcf_file)
-    return(0)
+    ## list samples in VCF file
+    with open(args.out_filename, 'w') if args.out_filename else sys.stdout as out_file:
+      for vcf_file in vcf_files:
+        if args.verbose:
+          _log.write('processing file: ' + vcf_file.name + '\n')
+        list_samples(vcf_file, out_file)
+        vcf_file.close()
 
-  if args.maf_filename:
-    maf_file = open(args.maf_filename, 'w')
   else:
-    maf_file = sys.stdout
+    ## convert vcf(s) to maf
+    if args.maf_filename:
+      maf_file = open(args.maf_filename, 'w')
+    elif args.out_filename:
+      maf_file = open(args.out_filename, 'w')
+    else:
+      maf_file = sys.stdout
 
-  n = vcf2maf(vcf_file, maf_file, verbose=args.verbose)
+    t = time()
+    n = 0
 
-  t = time() - t
+    for vcf_file in vcf_files:
+      if args.verbose:
+        _log.write('processing file: ' + vcf_file.name + '\n')
 
-  if args.verbose:
-    _log.write('vcf2maf processed %d records in %0.1f seconds\n' % (n, t,))
-    _log.write('...or %0.1f seconds per %d records\n' % (t/n*100000, 100000,))
+      n += vcf2maf(vcf_file, maf_file, verbose=args.verbose)
+
+      vcf_file.close()
+    maf_file.close()
+
+    t = time() - t
+    if args.verbose:
+      _log.write('vcf2maf processed %d records in %0.1f seconds\n' % (n, t,))
+      _log.write('...or %0.1f seconds per %d records\n' % (t/n*100000, 100000,))
 
 
 ## call main method if this file is run as a script
 if __name__ == '__main__':
     main()
-
