@@ -40,21 +40,21 @@ ALT & REF & PRIMARY:GT              Tumor_Validation_Allele1
 
 ALT & REF & PRIMARY:GT              Tumor_Validation_Allele2
 
-                                    Match_Norm_Validation_Allele1
+??                                  Match_Norm_Validation_Allele1
 
-                                    Match_Norm_Validation_Allele2
+??                                  Match_Norm_Validation_Allele2
 
-                                    Verification_Status
+??                                  Verification_Status
 
-                                    Validation_Status
+??                                  Validation_Status
 
 INFO:SOMATIC                        Mutation_Status
 
 ##phase & /vs|                      Sequencing_Phase
 
-                                    Sequence_Source
+??                                  Sequence_Source
 
-                                    Validation_Method
+??                                  Validation_Method
 
 null                                Score
 
@@ -62,6 +62,6 @@ null                                BAM_File
 
 ##SAMPLE:Platform                   Sequencer
 
-                                    Tumor_Sample_UUID
+##SAMPLE:SampleUUID                 Tumor_Sample_UUID
 
-                                    Matched_Norm_Sample_UUID
+##SAMPLE:SampleUUID                 Matched_Norm_Sample_UUID
