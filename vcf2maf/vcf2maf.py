@@ -4,7 +4,13 @@
 ############################################################
 
 ## example usage:
-## gunzip --stdout TCGA-AA-A024_W_IlluminaGA-DNASeq_exome.vcf.gz | python vcf2maf.py -v > tmp.out3.maf
+##
+## python vcf2maf.py -v --vcf examples/example1.vcf --maf out.maf
+##
+## python vcf2maf.py -v --list-samples --vcf examples/example1.vcf
+##
+## gunzip --stdout TCGA-AA-A024_W_IlluminaGA-DNASeq_exome.vcf.gz | python vcf2maf.py -v > out.maf
+##
 
 import re
 import sys
@@ -20,8 +26,101 @@ _log = sys.stderr
 ## regex matching TCGA barcodes
 _barcode_pattern = re.compile(r'(TCGA-\w{2}-\w{4}-\w{3}-\w{3}-\w{4}-\w{2})')
 
+## regex matching dbSNP rsIDs
+_rsid_pattern = re.compile(r'rs\d+')
+
 ## genotypes may be delimited by | or slash characters
 split_on_slash_or_bar = re.compile(r"[\|\/\\]")
+
+
+## snpEFF Functional class {NONE, SILENT, MISSENSE, NONSENSE}.
+## snpEFF Effects:
+## TODO: should be checked
+snpeff_variant_classification = {
+  "UPSTREAM" : "5'Flank",
+  "DOWNSTREAM" : "3'Flank",
+  "INTERGENIC" : "IGR",
+  "INTERGENIC_CONSERVED" : "IGR",
+  "INTRAGENIC" : "Silent",
+  "UTR_5_PRIME" : "5'UTR",
+  "UTR_5_DELETED" : "5'UTR",
+  "UTR_3_PRIME" : "3'UTR",
+  "UTR_3_DELETED" : "3'UTR",
+  "START_GAINED" : "Translation_Start_Site",
+  "START_LOST" : "Translation_Start_Site",
+  "SYNONYMOUS_START" : "Translation_Start_Site",
+  "NON_SYNONYMOUS_START" : "Translation_Start_Site",
+  "STOP_GAINED" : "Missense_Mutation",
+  "SYNONYMOUS_STOP" : "Silent",
+  "STOP_LOST" : "Nonstop_Mutation",
+  "SPLICE_SITE_ACCEPTOR" : "Splice_Site",
+  "SPLICE_SITE_DONOR" : "Splice_Site",
+  "NON_SYNONYMOUS_CODING" : None,
+  "SYNONYMOUS_CODING" : "Silent",
+  "FRAME_SHIFT" : None,
+  "CODON_CHANGE" : "Missense_Mutation",
+  "CODON_INSERTION" : "In_Frame_Ins",
+  "CODON_CHANGE_PLUS_CODON_INSERTION" : "In_Frame_Ins",
+  "CODON_DELETION" : "In_Frame_Del",
+  "CODON_CHANGE_PLUS_CODON_DELETION" : "In_Frame_Del",
+  "TRANSCRIPT" : None,
+  "CDS" : None,
+  "GENE" : None,
+  "EXON" : None,
+  "EXON_DELETED" : "In_Frame_Del",
+  "INTRON" : "Intron",
+  "INTRON_CONSERVED" : "Intron",
+  "RARE_AMINO_ACID" : "Missense_Mutation" }
+
+## snpEff fields
+EFFECT = 0
+FUNCLASS = 2
+
+## EFF=FRAME_SHIFT & (INFO:VT=DEL or INFO:SVTYPE=DEL) => "Frame_Shift_Del",
+## EFF=FRAME_SHIFT & (INFO:VT=INS or INFO:SVTYPE=INS) => "Frame_Shift_Ins",
+## EFF=CODON_DELETION => "In_Frame_Del",
+## EFF=CODON_INSERTION =>  "In_Frame_Ins",
+## EFF=NON_SYNONYMOUS_CODING & Functional_class=MISSENSE => "Missense_Mutation",
+## EFF=NON_SYNONYMOUS_CODING & Functional_class=NONSENSE => "Nonsense_Mutation",
+## EFF=SYNONYMOUS_CODING => "Silent",
+## EFF=SPLICE_SITE_ACCEPTOR or SPLICE_SITE_DONOR => "Splice_Site",
+## EFF=START_GAINED or START_LOST or SYNONYMOUS_START(?) or NON_SYNONYMOUS_START => "Translation_Start_Site",
+## EFF=STOP_LOST => "Nonstop_Mutation",
+## EFF=UTR_3_PRIME or UTR_3_DELETED => "3'UTR",
+## EFF=UPSTREAM(?) => "5'Flank",
+## EFF=UTR_5_PRIME or UTR_5_DELETED => "5'UTR",
+## EFF=DOWNSTREAM(?) => "3'Flank",
+## EFF=INTERGENIC or INTERGENIC_CONSERVED => "IGR",
+## EFF=INTRON or INTRON_CONSERVED => "Intron",
+##  "RNA",
+##  "Targeted_Region",
+## EFF=START_GAINED ?? => "De_novo_Start_InFrame",
+## EFF=START_GAINED ?? => "De_novo_Start_OutOfFrame"]
+
+def snpeff_to_variant_classification(snpeff, record):
+  """map snpEFF Effects to MAF variant classifications"""
+
+  # TODO: this mapping is imperfect and should be looked at by
+  # someone who understands the intent of the MAF classifications
+  if snpeff[EFFECT]=='FRAME_SHIFT':
+    if record.INFO.get('VT', None) == 'DEL' or record.INFO.get('SVTYPE', None) == 'DEL':
+      variant_class = 'Frame_Shift_Del'
+    elif record.INFO.get('VT', None) == 'INS' or record.INFO.get('SVTYPE', None) == 'INS':
+      variant_class = 'Frame_Shift_Ins'
+    else:
+      variant_class = None
+  if snpeff[EFFECT] in ['EXON', 'CDS', 'NON_SYNONYMOUS_CODING', 'TRANSCRIPT', 'GENE']:
+    if snpeff[FUNCLASS]=='MISSENSE':
+      variant_class = 'Missense_Mutation'
+    elif snpeff[FUNCLASS]=='NONSENSE':
+      variant_class = 'Nonsense_Mutation'
+    else:
+      variant_class = None
+  else:
+    variant_class = snpeff_variant_classification[snpeff[EFFECT]]
+
+  return variant_class
+
 
 
 def list_samples(vcf_file, out_file):
@@ -125,13 +224,57 @@ def vcf2maf(vcf_file, maf_file, verbose=False):
 
       fields = []
 
+      ## parse out snpEff fields:
+
+      ## NON_SYNONYMOUS_CODING(MODERATE|MISSENSE|Atc/Gtc|I300V|749|NOC2L|protein_coding|CODING|ENST00000327044|)
+
+      ## EFFECT
+      ## IMPACT
+      ## FUNCLASS
+      ## CODON
+      ## AA
+      ## AA_LEN
+      ## GENE
+      ## BIOTYPE
+      ## CODING
+      ## TRID
+      ## EXID
+
+      variant_class = None
+      hugo = None
+      gene_id = None
+      if 'EFF' in record.INFO:
+        snpeffs = record.INFO['EFF'].split(',')
+
+        # TODO: which snpeff to pick?
+        if len(snpeffs) > 0:
+          snpeff = re.split(r'[\(\)\|]', snpeffs[0])
+          variant_class = snpeff_to_variant_classification(snpeff, record)
+          #if not variant_class:
+          #  _log.write('Unclassifiable variant: ' + str(snpeff) + '\n')
+          hugo = snpeff[6]
+          gene_id = snpeff[9]
+
       ## Hugo_Symbol
-      # TODO:
-      fields.append('???')
+      # TODO: fake data
+      # TODO: how to find HUGO gene name given position
+      if 'HUGO' in record.INFO:
+        hugo = record.INFO['HUGO']
+      if not hugo:
+        hugo = 'unknown'
+      fields.append(hugo)
 
       ## Entrez_Gene_Id
-      ## TODO: look for INFO:GENE field
-      fields.append('???')
+      ## see Table 8a: Annotation fields added for RNA-Seq variants
+      ## of the TCGA's VCF spec:
+      ## https://wiki.nci.nih.gov/display/TCGA/TCGA+Variant+Call+Format+%28VCF%29+Specification
+      # TODO: fake data:
+      # TODO: where to find this, if not in optional GENE field?
+      if 'GENE' in record.INFO:
+        gene_id = record.INFO['GENE']
+      if not gene_id:
+        gene_id = 'unknown'
+      fields.append(gene_id)
 
       ## Center
       fields.append(';'.join(centers))
@@ -152,7 +295,9 @@ def vcf2maf(vcf_file, maf_file, verbose=False):
       fields.append(strand)
 
       ## Variant_Classification
-      fields.append('???')
+      if not variant_class:
+        variant_class = 'unknown'
+      fields.append(variant_class)
 
       ## Variant_Type
       fields.append(record.INFO['VT'])
@@ -170,7 +315,7 @@ def vcf2maf(vcf_file, maf_file, verbose=False):
         tumor_alleles = split_on_slash_or_bar.split(record.genotype(tumor_sample_id).gt_bases)
         if len(tumor_alleles) < 1 or len(tumor_alleles) > 2:
           ## warning
-          _log.write('%d tumor alleles detected in record %d. Only haploid and diploid genotypes are supported.' % (len(tumor_alleles), i, ))
+          _log.write('%d tumor alleles detected in record %d. Only haploid and diploid genotypes are supported.\n' % (len(tumor_alleles), i, ))
       else:
         ## warning
         _log.write('No tumor alleles detected. Skipping record %d.\n' % (i,))
@@ -185,10 +330,16 @@ def vcf2maf(vcf_file, maf_file, verbose=False):
       fields.append(tumor_alleles[1] if len(tumor_alleles) > 1 else '')
 
       ## dbSNP_RS
-      fields.append('???')
+      if record.ID:
+        rsids = [rec_id for rec_id in record.ID.split(';') if _rsid_pattern.match(rec_id)]
+        if rsids:
+          fields.append(rsids[0])
+        else:
+          fields.append('')
 
       ## dbSNP_Val_Status
-      fields.append('???')
+      # TODO: look up dbSNP val status
+      fields.append('')
 
       ## Tumor_Sample_Barcode
       fields.append(tumor_sample_barcode)
@@ -243,15 +394,17 @@ def vcf2maf(vcf_file, maf_file, verbose=False):
       fields.append('')
 
       ## Sequence_Source
-      fields.append('???')
+      # TODO: fake data
+      fields.append('PCR')
 
       ## Validation_Method
-      fields.append('???')
-
-      ## Score
+      # TODO
       fields.append('')
 
-      ## BAM_File
+      ## Score (not in use)
+      fields.append('')
+
+      ## BAM_File (not in use)
       fields.append('')
 
       ## Sequencer

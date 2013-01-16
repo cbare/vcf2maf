@@ -77,7 +77,7 @@ columns = [
   'example':'Missense_Mutation',
   'case sensitive':'Yes',
   'null':'No',
-  'enumerated':'Frame_Shift_Del, Frame_Shift_Ins, In_Frame_Del, In_Frame_Ins, Missense_Mutation, Nonsense_Mutation, Silent, Splice_Site, Translation_Start_Site, Nonstop_Mutation, 3\'UTR, 3\'Flank, 5\'UTR, 5\'Flank, IGR1 , Intron, RNA, Targeted_Region, De_novo_Start_InFrame, or De_novo_Start_OutOfFrame'
+  'enumerated':['Frame_Shift_Del', 'Frame_Shift_Ins', 'In_Frame_Del', 'In_Frame_Ins', 'Missense_Mutation', 'Nonsense_Mutation', 'Silent', 'Splice_Site', 'Translation_Start_Site', 'Nonstop_Mutation', '3\'UTR', '3\'Flank', '5\'UTR', '5\'Flank', 'IGR', 'Intron', 'RNA', 'Targeted_Region', 'De_novo_Start_InFrame', 'De_novo_Start_OutOfFrame']
 },
 {
   'name':'Variant_Type',
@@ -85,7 +85,7 @@ columns = [
   'example':'INS',
   'case sensitive':'Yes',
   'null':'No',
-  'enumerated':'SNP, DNP, TNP, ONP, INS, DEL, or Consolidated2'
+  'enumerated':['SNP', 'DNP', 'TNP', 'ONP', 'INS', 'DEL', 'Consolidated']
 },
 {
   'name':'Reference_Allele',
@@ -93,7 +93,7 @@ columns = [
   'example':'A',
   'case sensitive':'Yes',
   'null':'No',
-  'enumerated':'A,C,G,T, and/or -'
+  'enumerated':['A','C','G','T','-']
 },
 {
   'name':'Tumor_Seq_Allele1',
@@ -101,7 +101,7 @@ columns = [
   'example':'C',
   'case sensitive':'Yes',
   'null':'No',
-  'enumerated':'A,C,G,T, and/or -'
+  'enumerated':['A','C','G','T','-']
 },
 {
   'name':'Tumor_Seq_Allele2',
@@ -125,7 +125,7 @@ columns = [
   'example':'by2Hit2Allele;byCluster',
   'case sensitive':'No',
   'null':'Yes',
-  'enumerated':'by1000genomes;by2Hit2Allele; byCluster; byFrequency; byHapMap; byOtherPop; bySubmitter; alternate_allele3'
+  'enumerated':['by1000genomes', 'by2Hit2Allele', 'byCluster', 'byFrequency', 'byHapMap', 'byOtherPop', 'bySubmitter', 'alternate_allele3']
 },
 {
   'name':'Tumor_Sample_Barcode',
@@ -149,7 +149,7 @@ columns = [
   'example':'T',
   'case sensitive':'Yes',
   'null':'Yes',
-  'enumerated':'A,C,G,T, and/or -'
+  'enumerated':['A','C','G','T','-']
 },
 {
   'name':'Match_Norm_Seq_Allele2',
@@ -157,7 +157,7 @@ columns = [
   'example':'ACGT',
   'case sensitive':'Yes',
   'null':'Yes',
-  'enumerated':'A,C,G,T, and/or -'
+  'enumerated':['A','C','G','T','-']
 },
 {
   'name':'Tumor_Validation_Allele1',
@@ -165,7 +165,7 @@ columns = [
   'example':'-',
   'case sensitive':'Yes',
   'null':'Yes',
-  'enumerated':'A,C,G,T, and/or -'
+  'enumerated':['A','C','G','T','-']
 },
 {
   'name':'Tumor_Validation_Allele2',
@@ -173,7 +173,7 @@ columns = [
   'example':'A',
   'case sensitive':'Yes',
   'null':'Yes',
-  'enumerated':'A,C,G,T, and/or -'
+  'enumerated':['A','C','G','T','-']
 },
 {
   'name':'Match_Norm_Validation_Allele1',
@@ -181,7 +181,7 @@ columns = [
   'example':'C',
   'case sensitive':'Yes',
   'null':'Yes',
-  'enumerated':'A,C,G,T, and/or -'
+  'enumerated':['A','C','G','T','-']
 },
 {
   'name':'Match_Norm_Validation_Allele2',
@@ -189,7 +189,7 @@ columns = [
   'example':'G',
   'case sensitive':'Yes',
   'null':'Yes',
-  'enumerated':'A,C,G,T, and/or -'
+  'enumerated':['A','C','G','T','-']
 },
 {
   'name':'Verification_Status',
@@ -197,7 +197,7 @@ columns = [
   'example':'Verified',
   'case sensitive':'Yes',
   'null':'Yes',
-  'enumerated':'Verified, Unknown'
+  'enumerated':['Verified', 'Unknown']
 },
 {
   'name':'Validation_Status',
@@ -205,7 +205,7 @@ columns = [
   'example':'Valid',
   'case sensitive':'Yes',
   'null':'Yes',
-  'enumerated':'Valid, Unknown, Wildtype'
+  'enumerated':['Valid', 'Unknown', 'Wildtype']
 },
 {
   'name':'Mutation_Status',
@@ -229,7 +229,7 @@ columns = [
   'example':'PCR;Capture',
   'case sensitive':'Yes',
   'null':'No',
-  'enumerated':'PCR, Capture, WGS'
+  'enumerated':['PCR', 'Capture', 'WGS']
 },
 {
   'name':'Validation_Method',
@@ -261,7 +261,7 @@ columns = [
   'example':'Illumina GAIIx;SOLID',
   'case sensitive':'Yes',
   'null':'No',
-  'enumerated':'Illumina GAIIx, Illumina HiSeq, SOLID, 454, ABI 3730xl'
+  'enumerated':['Illumina GAIIx', 'Illumina HiSeq', 'SOLID', '454', 'ABI 3730xl']
 },
 {
   'name':'Tumor_Sample_UUID',
