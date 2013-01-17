@@ -352,11 +352,35 @@ def vcf2maf(vcf_file, maf_file, decrement_end_coordinate=False, verbose=False):
         ## allow blank alleles.
         continue
 
+      ## TODO: Y chromosome issue
+      ## The validator gives the following error for a Y chromosome SNP at position 2940479, due to an empty
+      ## Tumor_Seq_Allele2 field.
+
+      ## An error occurred while validating MAF file 'foo.maf', line 213,136: 'Tumor_Seq_Allele2' value ''
+      ## is invalid - must either be DEL, '-', or be composed of A, C, G, T, and '-' 
+      ## [archive ucsc.edu_OV.IlluminaGA-DNASeq.Level_2.128.0.0]
+
+      ## In the VCF file, we see:
+      ## ... GT:DP:AD:BQ:MQ:SB:FA  1:19:0,19:0,39.0:0,31.9:0,0.632:1.0 1:9:0,9:0,38.3:0,30.3:0,0.667:1.0
+
+      ## The validator doesn't like '-', either:
+      ## An error occurred while validating MAF file 'foo.maf', line 213,136: if Variant_Type is SNP then Tumor_Seq_Allele2
+      ## length must be 1  [archive ucsc.edu_OV.IlluminaGA-DNASeq.Level_2.128.0.0]
+      ## An error occurred while validating MAF file 'foo.maf', line 213,136: if Variant_Type is SNP then Tumor_Seq_Allele2
+      ## value must not be '-' [archive ucsc.edu_OV.IlluminaGA-DNASeq.Level_2.128.0.0]
+
+      ## example maf files have:
+      ## Y 21154479  21154479  C C G
+      ## Y 20138094  20138094  C T T
+
+      ## Another issue: Verify that PyVCF handles this notation correctly
+      ## Y  10011498  rs2313792 G T,C 33.0  blq SS=1;VT=SNP;DB;DP=81  GT:DP:AD:BQ:MQ:SB:FA  2:42:0,11,31:0,38.7,38.9:0,34.2,31.2:0,0.273,0.419:1.0  2:39:0,6,33:0,36.5,38.0:0,37.3,30.7:0,0.167,0.394:1.0
+
       ## Tumor_Seq_Allele1
       fields.append(tumor_alleles[0] if len(tumor_alleles) > 0 else '')
 
       ## Tumor_Seq_Allele2
-      fields.append(tumor_alleles[1] if len(tumor_alleles) > 1 else '')
+      fields.append(tumor_alleles[1] if len(tumor_alleles) > 1 else '-')
 
       ## dbSNP_RS
       rsids = []
