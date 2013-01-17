@@ -15,6 +15,7 @@
 import re
 import sys
 import argparse
+import uuid
 import vcf
 from time import time
 import maf_spec
@@ -26,12 +27,18 @@ _log = sys.stderr
 ## regex matching TCGA barcodes
 _barcode_pattern = re.compile(r'(TCGA-\w{2}-\w{4}-\w{3}-\w{3}-\w{4}-\w{2})')
 
-## regex matching dbSNP rsIDs
-_rsid_pattern = re.compile(r'rs\d+')
+## regex matching dbSNP rsIDs, which are supposed to look
+## like rs4279785 but sometimes look like rs4279785_1_1581958
+## where the position is chr 1, 1581958
+_rsid_pattern = re.compile(r'(rs[0-9]+)(_[0-9]+_[0-9]+)?')
 
 ## genotypes may be delimited by | or slash characters
 split_on_slash_or_bar = re.compile(r"[\|\/\\]")
 
+_sequencer_allowed_values = maf_spec.columns_by_name['Sequencer']['enumerated']
+
+def remove_quotes(string):
+  return re.sub(r'^\s*([\'|"])(.*)\1\s*$', r'\2', string)
 
 ## snpEFF Functional class {NONE, SILENT, MISSENSE, NONSENSE}.
 ## snpEFF Effects:
@@ -72,10 +79,6 @@ snpeff_variant_classification = {
   "INTRON_CONSERVED" : "Intron",
   "RARE_AMINO_ACID" : "Missense_Mutation" }
 
-## snpEff fields
-EFFECT = 0
-FUNCLASS = 2
-
 ## EFF=FRAME_SHIFT & (INFO:VT=DEL or INFO:SVTYPE=DEL) => "Frame_Shift_Del",
 ## EFF=FRAME_SHIFT & (INFO:VT=INS or INFO:SVTYPE=INS) => "Frame_Shift_Ins",
 ## EFF=CODON_DELETION => "In_Frame_Del",
@@ -97,30 +100,49 @@ FUNCLASS = 2
 ## EFF=START_GAINED ?? => "De_novo_Start_InFrame",
 ## EFF=START_GAINED ?? => "De_novo_Start_OutOfFrame"]
 
+## NON_SYNONYMOUS_CODING(MODERATE|MISSENSE|Atc/Gtc|I300V|749|NOC2L|protein_coding|CODING|ENST00000327044|)
+
+## snpEff fields
+_EFFECT = 0
+_IMPACT = 1
+_FUNCLASS = 2
+_CODON = 3
+_AA = 4
+_AA_LEN = 5
+_GENE = 6
+_BIOTYPE = 7
+_CODING = 8
+_TRID = 9
+_EXID = 10
+
 def snpeff_to_variant_classification(snpeff, record):
   """map snpEFF Effects to MAF variant classifications"""
 
   # TODO: this mapping is imperfect and should be looked at by
   # someone who understands the intent of the MAF classifications
-  if snpeff[EFFECT]=='FRAME_SHIFT':
+
+  # See biotype: http://vega.sanger.ac.uk/info/about/gene_and_transcript_types.html
+  biotype = snpeff[_BIOTYPE]
+  if biotype=='lincRNA' or re.search('ncrna', biotype, flags=re.IGNORECASE):
+    variant_class = 'RNA'
+  elif snpeff[_EFFECT]=='FRAME_SHIFT':
     if record.INFO.get('VT', None) == 'DEL' or record.INFO.get('SVTYPE', None) == 'DEL':
       variant_class = 'Frame_Shift_Del'
     elif record.INFO.get('VT', None) == 'INS' or record.INFO.get('SVTYPE', None) == 'INS':
       variant_class = 'Frame_Shift_Ins'
     else:
       variant_class = None
-  if snpeff[EFFECT] in ['EXON', 'CDS', 'NON_SYNONYMOUS_CODING', 'TRANSCRIPT', 'GENE']:
-    if snpeff[FUNCLASS]=='MISSENSE':
+  elif snpeff[_EFFECT] in ['EXON', 'CDS', 'NON_SYNONYMOUS_CODING', 'TRANSCRIPT', 'GENE']:
+    if snpeff[_FUNCLASS]=='MISSENSE':
       variant_class = 'Missense_Mutation'
-    elif snpeff[FUNCLASS]=='NONSENSE':
+    elif snpeff[_FUNCLASS]=='NONSENSE':
       variant_class = 'Nonsense_Mutation'
     else:
       variant_class = None
   else:
-    variant_class = snpeff_variant_classification[snpeff[EFFECT]]
+    variant_class = snpeff_variant_classification[snpeff[_EFFECT]]
 
   return variant_class
-
 
 
 def list_samples(vcf_file, out_file):
@@ -152,7 +174,7 @@ def _extract_tcga_barcode(sample):
   return barcode
 
 
-def vcf2maf(vcf_file, maf_file, verbose=False):
+def vcf2maf(vcf_file, maf_file, decrement_end_coordinate=False, verbose=False):
   """
   Read a VCf file and output a corresponding MAF file.
   """
@@ -165,8 +187,23 @@ def vcf2maf(vcf_file, maf_file, verbose=False):
   ## also look in ##contig=<ID={ID},length={length},assembly={assembly}
   ncbi_build = vcf_reader.metadata['reference']['ID'].split(' ')[0]
 
-  platform = vcf_reader.metadata['SAMPLE'][0]['Platform']
-  # TODO check all platforms and warn if different
+  # fudge
+  if ncbi_build=='grch37-lite':
+    ncbi_build = '37'
+
+  ## get a list of unique platforms
+  ## Hey Python, why you no have unique function?
+  platforms = []
+  for sample in vcf_reader.metadata['SAMPLE']:
+    if 'Platform' in sample:
+      platform = remove_quotes(sample['Platform'])
+
+      # TODO: this is a fudge, fix it somehow
+      if platform=='Illumina':
+        platform = 'Illumina GAIIx'
+
+      if platform not in platforms and platform in _sequencer_allowed_values:
+        platforms.append(platform)
 
   ## TCGA identifier for an individual
   individual = vcf_reader.metadata['INDIVIDUAL']
@@ -190,7 +227,8 @@ def vcf2maf(vcf_file, maf_file, verbose=False):
   if verbose: _log.write('normal sample barcode = '+str(normal_sample_barcode)+'\n')
 
   ## look for UUID
-  normal_sample_uuid = sample['SampleUUID'] if 'SampleUUID' in sample else ''
+  ## TODO fudge fake uuid
+  normal_sample_uuid = sample['SampleUUID'] if 'SampleUUID' in sample else '00000000-0000-0000-0000-000000000001'
 
   ## find tumor sample
   tumor_sample_names = ['tumor', 'primary']
@@ -206,12 +244,14 @@ def vcf2maf(vcf_file, maf_file, verbose=False):
   if verbose: _log.write('normal sample barcode = '+str(tumor_sample_barcode)+'\n')
 
   ## look for UUID
-  tumor_sample_uuid = sample['SampleUUID'] if 'SampleUUID' in sample else ''
+  ## TODO fudge fake uuid
+  tumor_sample_uuid = sample['SampleUUID'] if 'SampleUUID' in sample else '00000000-0000-0000-0000-000000000002'
 
   ## always use plus strand by convention
   strand = '+'
 
   ## write Mutation Annotation Format (MAF) file header
+  maf_file.write('#version 2.3\n')
   maf_file.write('\t'.join([col['name'] for col in maf_spec.columns]))
   maf_file.write('\n')
 
@@ -222,27 +262,16 @@ def vcf2maf(vcf_file, maf_file, verbose=False):
       if verbose and i % 10000 == 0:
         _log.write('processing record %d\n' % (i,))
 
+      ## look for excuses to throw away this record
+      if 'N' in record.REF or 'N' in record.ALT:
+        continue
+
       fields = []
 
       ## parse out snpEff fields:
-
-      ## NON_SYNONYMOUS_CODING(MODERATE|MISSENSE|Atc/Gtc|I300V|749|NOC2L|protein_coding|CODING|ENST00000327044|)
-
-      ## EFFECT
-      ## IMPACT
-      ## FUNCLASS
-      ## CODON
-      ## AA
-      ## AA_LEN
-      ## GENE
-      ## BIOTYPE
-      ## CODING
-      ## TRID
-      ## EXID
-
       variant_class = None
       hugo = None
-      gene_id = None
+      gene_id = 0
       if 'EFF' in record.INFO:
         snpeffs = record.INFO['EFF'].split(',')
 
@@ -253,7 +282,7 @@ def vcf2maf(vcf_file, maf_file, verbose=False):
           #if not variant_class:
           #  _log.write('Unclassifiable variant: ' + str(snpeff) + '\n')
           hugo = snpeff[6]
-          gene_id = snpeff[9]
+          # this seems to be an ensemble id: gene_id = snpeff[9]
 
       ## Hugo_Symbol
       # TODO: fake data
@@ -273,7 +302,7 @@ def vcf2maf(vcf_file, maf_file, verbose=False):
       if 'GENE' in record.INFO:
         gene_id = record.INFO['GENE']
       if not gene_id:
-        gene_id = 'unknown'
+        gene_id = '0'
       fields.append(gene_id)
 
       ## Center
@@ -289,14 +318,14 @@ def vcf2maf(vcf_file, maf_file, verbose=False):
       fields.append(str(record.start))
 
       ## End_Position
-      fields.append(str(record.end))
+      fields.append(str(record.end - 1 if decrement_end_coordinate else record.end))
 
       ## Strand
       fields.append(strand)
 
       ## Variant_Classification
       if not variant_class:
-        variant_class = 'unknown'
+        variant_class = 'Silent'
       fields.append(variant_class)
 
       ## Variant_Type
@@ -330,12 +359,17 @@ def vcf2maf(vcf_file, maf_file, verbose=False):
       fields.append(tumor_alleles[1] if len(tumor_alleles) > 1 else '')
 
       ## dbSNP_RS
+      rsids = []
       if record.ID:
-        rsids = [rec_id for rec_id in record.ID.split(';') if _rsid_pattern.match(rec_id)]
-        if rsids:
-          fields.append(rsids[0])
-        else:
-          fields.append('')
+        for rec_id in record.ID.split(';'):
+          m = _rsid_pattern.match(rec_id)
+          if m:
+            rsids.append(m.group(1))
+
+      if rsids:
+        fields.append(rsids[0])
+      else:
+        fields.append('')
 
       ## dbSNP_Val_Status
       # TODO: look up dbSNP val status
@@ -408,7 +442,7 @@ def vcf2maf(vcf_file, maf_file, verbose=False):
       fields.append('')
 
       ## Sequencer
-      fields.append(platform)
+      fields.append(";".join(platforms))
 
       ## Tumor_Sample_UUID
       fields.append(tumor_sample_uuid)
@@ -417,9 +451,11 @@ def vcf2maf(vcf_file, maf_file, verbose=False):
       fields.append(normal_sample_uuid)
 
       ## write a row of the MAF file
-      for field in fields:
-        maf_file.write(field)
+      if len(fields) > 0:
+        maf_file.write(fields[0])
+      for field in fields[1:]:
         maf_file.write('\t')
+        maf_file.write(field)
       maf_file.write('\n')
 
   except Exception:
@@ -437,6 +473,7 @@ def main():
   parser.add_argument('--maf', dest='maf_filename', help='Filename of MAF file to output')
   parser.add_argument('-o', '--out', dest='out_filename', help='Name of output file')
   parser.add_argument('-l', '--list-samples', action='store_true', help='List the sample IDs in a VCF file')
+  parser.add_argument('--decrement-end-coordinate', action='store_true', help='Subtract one from the end coordinate to make the start-end interval inclusive. A SNP should have start==end.')
   parser.add_argument('vcf_filenames2', metavar='VCF_FILENAME', nargs='*', help='Filename of a VCF file to read')
   
   args = parser.parse_args()
@@ -479,7 +516,7 @@ def main():
       if args.verbose:
         _log.write('processing file: ' + vcf_file.name + '\n')
 
-      n += vcf2maf(vcf_file, maf_file, verbose=args.verbose)
+      n += vcf2maf(vcf_file, maf_file, decrement_end_coordinate=args.decrement_end_coordinate, verbose=args.verbose)
 
       vcf_file.close()
     maf_file.close()

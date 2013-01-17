@@ -256,12 +256,23 @@ columns = [
   'enumerated':'No'
 },
 {
+  ## the MAF 2.3 specification allows these values:
+  ## Illumina GAIIx, Illumina HiSeq, SOLID, 454, ABI 3730xl
+
+  ## But, according to the validator, Sequencer must be one or more of:
+  ## Illumina GAIIx, Illumina HiSeq, SOLID, 454, ABI 3730xl,
+  ## Ion Torrent PGM, Ion Torrent Proton, PacBio RS, Illumina MiSeq,
+  ## Illumina HiSeq 2500, 454 GS FLX Titanium, AB SOLiD 4 System
+  ## separate multiple entries with semicolon
+
   'name':'Sequencer',
   'description':'Instrument used to produce primary data. Separate multiple entries using semicolons.',
   'example':'Illumina GAIIx;SOLID',
   'case sensitive':'Yes',
   'null':'No',
-  'enumerated':['Illumina GAIIx', 'Illumina HiSeq', 'SOLID', '454', 'ABI 3730xl']
+  'enumerated':['Illumina GAIIx', 'Illumina HiSeq', 'SOLID', '454', 'ABI 3730xl', 
+                'Ion Torrent PGM', 'Ion Torrent Proton', 'PacBio RS', 'Illumina MiSeq',
+                'Illumina HiSeq 2500', '454 GS FLX Titanium', 'AB SOLiD 4 System']
 },
 {
   'name':'Tumor_Sample_UUID',
@@ -279,3 +290,10 @@ columns = [
   'null':'No (for UUID-based files)',
   'enumerated':'No'
 }]
+
+
+columns_by_name = {}
+for column in columns:
+  columns_by_name[column['name']] = column
+
+
