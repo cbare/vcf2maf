@@ -1,6 +1,8 @@
 vcf2maf: a VCF to MAF conversion utility
 ========================================
 
+**This code is no longer maintained**. Please have a look at: [mskcc's vcf2maf](https://github.com/mskcc/vcf2maf).
+
 Files in the MAF (Mutation Annotation Format) are used in TCGA to track DNA variants/mutations.
 
 Vcf2maf is a tool for converting files in [Variant Call Format (VCF)](https://wiki.nci.nih.gov/display/TCGA/TCGA+Variant+Call+Format+%28VCF%29+1.1+Specification) to [MAF](https://wiki.nci.nih.gov/display/TCGA/Mutation+Annotation+Format) format.
